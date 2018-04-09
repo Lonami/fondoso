@@ -143,6 +143,7 @@ fn main() {
     let mut positions = "".to_string();
     let mut colours = "".to_string();
     let mut randomise_colours = false;
+    let mut output = "output.png".to_string();
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -164,7 +165,10 @@ fn main() {
             The last color is repeated until it fills all positions");
         ap.refer(&mut randomise_colours)
             .add_option(&["-r", "--random"], StoreTrue,
-            "randomise colours instead repeating the last one.");
+            "randomise colours instead repeating the last one");
+        ap.refer(&mut output)
+            .add_option(&["-o", "--output"], Store,
+            "output filename");
 
         ap.parse_args_or_exit();
     }
@@ -214,7 +218,7 @@ fn main() {
     if verbose {
         println!("100.00%. Saving...");
     }
-    let ref mut fp = File::create("ass.png").unwrap();
+    let ref mut fp = File::create(output).unwrap();
     image::ImageRgb8(img).save(fp, image::PNG).unwrap();
     if verbose {
         println!("Done.");
