@@ -11,6 +11,18 @@ use rand::{Rng, thread_rng};
 use image::ImageBuffer;
 use argparse::{ArgumentParser, StoreTrue, Store};
 
+#[derive(Debug)]
+struct Point {
+    x: usize,
+    y: usize,
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+const VALUE_SEPARATOR: char = ',';
+const LIST_SEPARATOR: char = ':';
+
 fn offset(value: u8) -> u8 {
     let mut random: i32 = 0;
     while random == 0 {
@@ -57,22 +69,89 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
     }
 }
 
+fn parse_points(w: usize, h: usize,
+                number: usize, positions: &str, colours: &str)
+    -> Vec<Point>
+{
+    let mut positions: Vec<(usize, usize)> = if positions.is_empty() {
+        Vec::new()
+    } else {
+        positions.split(LIST_SEPARATOR).map(|point| {
+            let point: Vec<&str> = point.split(VALUE_SEPARATOR).collect();
+            if point.len() != 2 {
+                eprintln!("Incorrect point format (must be x{}y)",
+                          VALUE_SEPARATOR);
+                exit(1);
+            }
+            let x: usize = parse_or_exit(point[0], "x coordinate");
+            let y: usize = parse_or_exit(point[1], "y coordinate");
+            (x, y)
+        }).collect()
+    };
+
+    let mut colours: Vec<(u8, u8, u8)> = if colours.is_empty() {
+        Vec::new()
+    } else {
+            colours.split(LIST_SEPARATOR).map(|point| {
+            let colour: Vec<&str> = point.split(VALUE_SEPARATOR).collect();
+            if colour.len() != 3 {
+                eprintln!("Incorrect colour format (must be r{0}g{0}b)",
+                          VALUE_SEPARATOR);
+                exit(1);
+            }
+            let r: u8 = parse_or_exit(colour[0], "red channel");
+            let g: u8 = parse_or_exit(colour[1], "green channel");
+            let b: u8 = parse_or_exit(colour[2], "blue channel");
+            (r, g, b)
+        }).collect()
+    };
+
+    if number == 0 && positions.is_empty() {
+        positions.push((w / 2, h / 2));
+    } else {
+        while positions.len() < number {
+            positions.push((thread_rng().gen_range(0, w),
+                            thread_rng().gen_range(0, h)));
+        }
+    }
+
+    let last = colours.get(colours.len() - 1).unwrap_or(&(0, 0, 0)).clone();
+    while colours.len() < positions.len() {
+        colours.push(last.clone());
+    }
+
+    (0..positions.len()).map(|i| {
+        let (x, y) = positions[i];
+        let (r, g, b) = colours[i];
+        Point { x, y, r, g, b}
+    }).collect()
+}
+
 fn main() {
     let mut verbose = false;
     let mut size = "500x500".to_string();
-    let mut point_count: u32 = 1;
+    let mut point_count: usize = 0;
+    let mut positions = "".to_string();
+    let mut colours = "".to_string();
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
         ap.refer(&mut verbose)
             .add_option(&["-v", "--verbose"], StoreTrue,
-            "Be verbose");
+            "be verbose");
         ap.refer(&mut size)
             .add_option(&["-s", "--size"], Store,
-            "Size for the generated image in WxH format");
+            "size for the generated image in WxH format");
         ap.refer(&mut point_count)
             .add_option(&["-n", "--number"], Store,
-            "Number of points with which to start");
+            "number of random points to add to the list of positions");
+        ap.refer(&mut positions)
+            .add_option(&["-p", "--positions"], Store,
+            "colon-separated list of comma-separated points x,y");
+        ap.refer(&mut colours)
+            .add_option(&["-c", "--colors", "--colours"], Store,
+            "colon-separated list of comma-separated colours r,g,b.\n\
+            The last color is repeated until it fills all positions");
 
         ap.parse_args_or_exit();
     }
@@ -88,11 +167,9 @@ fn main() {
     let mut added = vec![vec![false; w]; h];
     let mut pending = Vec::new();
 
-    for _ in 0..point_count {
-        let x = thread_rng().gen_range(0, w);
-        let y = thread_rng().gen_range(0, h);
-        pending.push((0u8, 0u8, 0u8, x, y));
-        added[y][x] = true;
+    for point in parse_points(w, h, point_count, &positions, &colours) {
+        pending.push((point.r, point.g, point.b, point.x, point.y));
+        added[point.y][point.x] = true;
     }
 
     let total = w * h;
