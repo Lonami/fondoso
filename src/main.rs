@@ -60,6 +60,7 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
 fn main() {
     let mut verbose = false;
     let mut size = "500x500".to_string();
+    let mut point_count: u32 = 1;
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -69,9 +70,12 @@ fn main() {
         ap.refer(&mut size)
             .add_option(&["-s", "--size"], Store,
             "Size for the generated image in WxH format");
+        ap.refer(&mut point_count)
+            .add_option(&["-n", "--number"], Store,
+            "Number of points with which to start");
+
         ap.parse_args_or_exit();
     }
-
     let size: Vec<&str> = size.split('x').collect();
     if size.len() != 2 {
         eprintln!("Incorrect size format (must be WxH)");
@@ -84,9 +88,10 @@ fn main() {
     let mut added = vec![vec![false; w]; h];
     let mut pending = Vec::new();
 
-    let start_points = vec![(w / 2, h / 2)];
-    for (x, y) in start_points {
-        pending.push((0u8, 0u8, 0u8, w / 2, h / 2));
+    for _ in 0..point_count {
+        let x = thread_rng().gen_range(0, w);
+        let y = thread_rng().gen_range(0, h);
+        pending.push((0u8, 0u8, 0u8, x, y));
         added[y][x] = true;
     }
 
