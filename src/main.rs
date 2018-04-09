@@ -23,10 +23,10 @@ struct Point {
 const VALUE_SEPARATOR: char = ',';
 const LIST_SEPARATOR: char = ':';
 
-fn offset(value: u8) -> u8 {
+fn offset(value: u8, delta: i32) -> u8 {
     let mut random: i32 = 0;
     while random == 0 {
-        random = thread_rng().gen_range(-4, 4+1);
+        random = thread_rng().gen_range(-delta, delta + 1);
     }
     match value as i32 + random {
         x if x < 0   => 0,
@@ -144,6 +144,7 @@ fn main() {
     let mut colours = "".to_string();
     let mut randomise_colours = false;
     let mut output = "output.png".to_string();
+    let mut delta = 4u32;
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -169,6 +170,9 @@ fn main() {
         ap.refer(&mut output)
             .add_option(&["-o", "--output"], Store,
             "output filename");
+        ap.refer(&mut delta)
+            .add_option(&["-d", "--delta"], Store,
+            "delta offset when updating the colour at each step");
 
         ap.parse_args_or_exit();
     }
@@ -179,6 +183,7 @@ fn main() {
     }
     let w: usize = parse_or_exit(size[0], "width");
     let h: usize = parse_or_exit(size[1], "height");
+    let delta = delta as i32;
 
     let mut img = ImageBuffer::new(w as u32, h as u32);
     let mut added = vec![vec![false; w]; h];
@@ -201,9 +206,9 @@ fn main() {
         let which = thread_rng().gen_range(0, pending.len());
         let (r, g, b, x, y) = pending.remove(which);
 
-        let r = offset(r);
-        let g = offset(g);
-        let b = offset(b);
+        let r = offset(r, delta);
+        let g = offset(g, delta);
+        let b = offset(b, delta);
 
         img.put_pixel(x as u32, y as u32, image::Rgb([r, g, b]));
         done += 1;
