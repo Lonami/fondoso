@@ -35,7 +35,7 @@ fn offset(value: u8, delta: i32) -> u8 {
     }
 }
 
-fn neighbours(x: usize, y: usize, w: usize, h: usize)
+fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: Option<u8>)
     -> Vec<(usize, usize)>
 {
     let mut result = Vec::new();
@@ -52,6 +52,11 @@ fn neighbours(x: usize, y: usize, w: usize, h: usize)
             result.push((nx as usize, ny as usize));
         }
     }
+    if let Some(chance) = shuffle_chance {
+        if thread_rng().gen_range(0, 100) < chance {
+            thread_rng().shuffle(&mut result);
+        }
+    };
     result
 }
 
@@ -145,6 +150,7 @@ fn main() {
     let mut randomise_colours = false;
     let mut output = "output.png".to_string();
     let mut delta = 4u32;
+    let mut kind = "default".to_string();
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -173,6 +179,11 @@ fn main() {
         ap.refer(&mut delta)
             .add_option(&["-d", "--delta"], Store,
             "delta offset when updating the colour at each step");
+        ap.refer(&mut kind)
+            .add_option(&["-k", "--kind"], Store,
+            "the kind of list/point choosing to use. If a number is used\n\
+            it should be an integer between 0 and 100 indicating the chance\n\
+            to shuffle the list of neighbours (100 always, 0 never)");
 
         ap.parse_args_or_exit();
     }
@@ -188,6 +199,10 @@ fn main() {
     let mut img = ImageBuffer::new(w as u32, h as u32);
     let mut added = vec![vec![false; w]; h];
     let mut pending = Vec::new();
+    let kind_chance: Option<u8> = match kind.parse() {
+        Ok(x) => Some(x),
+        Err(_) => None
+    };
 
     for point in parse_points(w, h, point_count, &positions, &colours,
                               randomise_colours)
@@ -203,8 +218,12 @@ fn main() {
             println!("{:.2}%", 100.0 * (done as f64 / total as f64));
         }
 
-        let which = thread_rng().gen_range(0, pending.len());
-        let (r, g, b, x, y) = pending.remove(which);
+        let (r, g, b, x, y) = if kind_chance.is_none() {
+            let which = thread_rng().gen_range(0, pending.len());
+            pending.remove(which)
+        } else {
+            pending.pop().unwrap()
+        };
 
         let r = offset(r, delta);
         let g = offset(g, delta);
@@ -212,7 +231,7 @@ fn main() {
 
         img.put_pixel(x as u32, y as u32, image::Rgb([r, g, b]));
         done += 1;
-        for &(x, y) in neighbours(x, y, w, h).iter() {
+        for &(x, y) in neighbours(x, y, w, h, kind_chance).iter() {
             if !added[y][x] {
                 pending.push((r, g, b, x, y));
                 added[y][x] = true; // Moving this outside makes it more sparse

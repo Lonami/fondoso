@@ -17,4 +17,9 @@ Here are some cool things done with the program:
         <td><img src="https://user-images.githubusercontent.com/6297805/38497095-3a34aca0-3c00-11e8-8ce5-df93c3810172.png" height="250px" />
             <br /><code>./fondoso -p255,255:0,0:499,0:499,499:0,499 -c255,255,255:50,50,50</code></td>
     </tr>
+    <tr>
+        <td><img src="https://user-images.githubusercontent.com/6297805/38517952-e63c6214-3c3b-11e8-980c-b8909a563832.png" height="250px" />
+            <br /><code>./fondoso -rn10 -k80</code></td>
+        <td></td>
+    </tr>
 </table>
