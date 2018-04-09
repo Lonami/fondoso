@@ -70,7 +70,8 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
 }
 
 fn parse_points(w: usize, h: usize,
-                number: usize, positions: &str, colours: &str)
+                number: usize, positions: &str, colours: &str,
+                randomise_colours: bool)
     -> Vec<Point>
 {
     let mut positions: Vec<(usize, usize)> = if positions.is_empty() {
@@ -115,9 +116,17 @@ fn parse_points(w: usize, h: usize,
         }
     }
 
-    let last = colours.get(colours.len() - 1).unwrap_or(&(0, 0, 0)).clone();
-    while colours.len() < positions.len() {
-        colours.push(last.clone());
+    if randomise_colours {
+        while colours.len() < positions.len() {
+            colours.push((thread_rng().gen_range(0, 255),
+                          thread_rng().gen_range(0, 255),
+                          thread_rng().gen_range(0, 255)));
+        }
+    } else {
+        let last = colours.get(colours.len() - 1).unwrap_or(&(0, 0, 0)).clone();
+        while colours.len() < positions.len() {
+            colours.push(last.clone());
+        }
     }
 
     (0..positions.len()).map(|i| {
@@ -133,6 +142,7 @@ fn main() {
     let mut point_count: usize = 0;
     let mut positions = "".to_string();
     let mut colours = "".to_string();
+    let mut randomise_colours = false;
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -152,6 +162,9 @@ fn main() {
             .add_option(&["-c", "--colors", "--colours"], Store,
             "colon-separated list of comma-separated colours r,g,b.\n\
             The last color is repeated until it fills all positions");
+        ap.refer(&mut randomise_colours)
+            .add_option(&["-r", "--random"], StoreTrue,
+            "randomise colours instead repeating the last one.");
 
         ap.parse_args_or_exit();
     }
@@ -167,7 +180,9 @@ fn main() {
     let mut added = vec![vec![false; w]; h];
     let mut pending = Vec::new();
 
-    for point in parse_points(w, h, point_count, &positions, &colours) {
+    for point in parse_points(w, h, point_count, &positions, &colours,
+                              randomise_colours)
+    {
         pending.push((point.r, point.g, point.b, point.x, point.y));
         added[point.y][point.x] = true;
     }
