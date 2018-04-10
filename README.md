@@ -11,6 +11,8 @@ Python script that happened to yield such cool images.
 Here are some cool things done with the program:
 
 <table>
+    <tr><td><code>(lengthy test so images fit nicely, ignore)</code></td>
+        <td><code>(lengthy test so images fit nicely, ignore)</code></td></tr>
     <tr>
         <td><img src="https://user-images.githubusercontent.com/6297805/38497021-e9b13154-3bff-11e8-927d-911501d8e0ba.png" height="250px" />
             <br /><code>./fondoso -rn10</code></td>
@@ -20,6 +22,8 @@ Here are some cool things done with the program:
     <tr>
         <td><img src="https://user-images.githubusercontent.com/6297805/38517952-e63c6214-3c3b-11e8-980c-b8909a563832.png" height="250px" />
             <br /><code>./fondoso -rn10 -k80</code></td>
+        <td><img src="https://user-images.githubusercontent.com/6297805/38579410-32ee9e30-3d07-11e8-9c41-0296aa3192a2.png" height="250px" />
+            <br /><code>./fondoso -ktreerev -p250,250</code></td>
         <td></td>
     </tr>
 </table>

@@ -6,24 +6,30 @@ use std::fs::File;
 use std::str::FromStr;
 use std::fmt::Display;
 use std::process::exit;
+use std::collections::BTreeSet;
 
 use rand::{Rng, thread_rng};
 use image::ImageBuffer;
 use argparse::{ArgumentParser, StoreTrue, Store};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct Point {
-    x: usize,
-    y: usize,
+    // TODO Changing the order here is what gives interesting
+    // results for the BTreeSet. Mostly alternating rgb order.
+    // So implement PartialOrd/Ord ourselves to allow settings.
     r: u8,
     g: u8,
     b: u8,
+    x: usize,
+    y: usize,
 }
 
 #[derive(Debug)]
 enum PendingKind {
     VecPopRandom(Vec<Point>),
     VecShuffleNeighbours(Vec<Point>, u8), // chance
+    SetBTree(BTreeSet<Point>),
+    SetBTreeRev(BTreeSet<Point>),
 }
 
 impl PendingKind {
@@ -32,6 +38,10 @@ impl PendingKind {
             &mut PendingKind::VecPopRandom(ref mut x)
             | &mut PendingKind::VecShuffleNeighbours(ref mut x, _) => {
                 x.push(point)
+            },
+            &mut PendingKind::SetBTree(ref mut set)
+            | &mut PendingKind::SetBTreeRev(ref mut set) => {
+                set.insert(point);
             },
         }
     }
@@ -45,6 +55,14 @@ impl PendingKind {
             &mut PendingKind::VecShuffleNeighbours(ref mut vec, _) => {
                 vec.pop().unwrap()
             },
+            &mut PendingKind::SetBTree(ref mut set) => {
+                let point = set.iter().next().unwrap().clone();
+                set.take(&point).unwrap()
+            },
+            &mut PendingKind::SetBTreeRev(ref mut set) => {
+                let point = set.iter().rev().next().unwrap().clone();
+                set.take(&point).unwrap()
+            },
         }
     }
 
@@ -52,6 +70,9 @@ impl PendingKind {
         !match self {
             &PendingKind::VecPopRandom(ref x)
             | &PendingKind::VecShuffleNeighbours(ref x, _) => x.is_empty(),
+
+            &PendingKind::SetBTree(ref x)
+            | &PendingKind::SetBTreeRev(ref x) => x.is_empty()
         }
     }
 
@@ -224,7 +245,8 @@ fn main() {
             .add_option(&["-k", "--kind"], Store,
             "the kind of list/point choosing to use. If a number is used\n\
             it should be an integer between 0 and 100 indicating the chance\n\
-            to shuffle the list of neighbours (100 always, 0 never)");
+            to shuffle the list of neighbours (100 always, 0 never).\n\
+            Other values are 'tree' and 'treerev'");
 
         ap.parse_args_or_exit();
     }
@@ -242,7 +264,13 @@ fn main() {
 
     let mut pending = match kind.parse() {
         Ok(x) if x <= 100 => PendingKind::VecShuffleNeighbours(Vec::new(), x),
-        _ => PendingKind::VecPopRandom(Vec::new())
+        _ => {
+            match &kind[..] {
+                "tree" => PendingKind::SetBTree(BTreeSet::new()),
+                "treerev" => PendingKind::SetBTreeRev(BTreeSet::new()),
+                _ => PendingKind::VecPopRandom(Vec::new())
+            }
+        }
     };
 
     for point in parse_points(w, h, point_count, &positions, &colours,
