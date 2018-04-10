@@ -20,6 +20,49 @@ struct Point {
     b: u8,
 }
 
+#[derive(Debug)]
+enum PendingKind {
+    VecPopRandom(Vec<Point>),
+    VecShuffleNeighbours(Vec<Point>, u8), // chance
+}
+
+impl PendingKind {
+    fn add(&mut self, point: Point) {
+        match self {
+            &mut PendingKind::VecPopRandom(ref mut x)
+            | &mut PendingKind::VecShuffleNeighbours(ref mut x, _) => {
+                x.push(point)
+            },
+        }
+    }
+
+    fn pop(&mut self) -> Point {
+        match self {
+            &mut PendingKind::VecPopRandom(ref mut vec) => {
+                let which = thread_rng().gen_range(0, vec.len());
+                vec.remove(which)
+            },
+            &mut PendingKind::VecShuffleNeighbours(ref mut vec, _) => {
+                vec.pop().unwrap()
+            },
+        }
+    }
+
+    fn has_any(&self) -> bool {
+        !match self {
+            &PendingKind::VecPopRandom(ref x)
+            | &PendingKind::VecShuffleNeighbours(ref x, _) => x.is_empty(),
+        }
+    }
+
+    fn shuffle_chance(&self) -> u8 {
+        match self {
+            &PendingKind::VecShuffleNeighbours(_, chance) => chance,
+            _ => 0
+        }
+    }
+}
+
 const VALUE_SEPARATOR: char = ',';
 const LIST_SEPARATOR: char = ':';
 
@@ -35,7 +78,7 @@ fn offset(value: u8, delta: i32) -> u8 {
     }
 }
 
-fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: Option<u8>)
+fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: u8)
     -> Vec<(usize, usize)>
 {
     let mut result = Vec::new();
@@ -52,11 +95,9 @@ fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: Option<u8>
             result.push((nx as usize, ny as usize));
         }
     }
-    if let Some(chance) = shuffle_chance {
-        if thread_rng().gen_range(0, 100) < chance {
-            thread_rng().shuffle(&mut result);
-        }
-    };
+    if shuffle_chance != 0 && thread_rng().gen_range(0, 100) < shuffle_chance {
+        thread_rng().shuffle(&mut result);
+    }
     result
 }
 
@@ -137,7 +178,7 @@ fn parse_points(w: usize, h: usize,
     (0..positions.len()).map(|i| {
         let (x, y) = positions[i];
         let (r, g, b) = colours[i];
-        Point { x, y, r, g, b}
+        Point {x, y, r, g, b}
     }).collect()
 }
 
@@ -198,42 +239,38 @@ fn main() {
 
     let mut img = ImageBuffer::new(w as u32, h as u32);
     let mut added = vec![vec![false; w]; h];
-    let mut pending = Vec::new();
-    let kind_chance: Option<u8> = match kind.parse() {
-        Ok(x) => Some(x),
-        Err(_) => None
+
+    let mut pending = match kind.parse() {
+        Ok(x) if x <= 100 => PendingKind::VecShuffleNeighbours(Vec::new(), x),
+        _ => PendingKind::VecPopRandom(Vec::new())
     };
 
     for point in parse_points(w, h, point_count, &positions, &colours,
                               randomise_colours)
     {
-        pending.push((point.r, point.g, point.b, point.x, point.y));
         added[point.y][point.x] = true;
+        pending.add(point);
     }
 
     let total = w * h;
     let mut done = 0;
-    while !pending.is_empty() {
+    while pending.has_any() {
         if verbose && done % 10_000 == 0 {
             println!("{:.2}%", 100.0 * (done as f64 / total as f64));
         }
 
-        let (r, g, b, x, y) = if kind_chance.is_none() {
-            let which = thread_rng().gen_range(0, pending.len());
-            pending.remove(which)
-        } else {
-            pending.pop().unwrap()
-        };
-
+        let point = pending.pop();
+        let (r, g, b) = (point.r, point.g, point.b);
         let r = offset(r, delta);
         let g = offset(g, delta);
         let b = offset(b, delta);
 
+        let (x, y) = (point.x, point.y);
         img.put_pixel(x as u32, y as u32, image::Rgb([r, g, b]));
         done += 1;
-        for &(x, y) in neighbours(x, y, w, h, kind_chance).iter() {
+        for &(x, y) in neighbours(x, y, w, h, pending.shuffle_chance()).iter() {
             if !added[y][x] {
-                pending.push((r, g, b, x, y));
+                pending.add(Point {r, g, b, x, y});
                 added[y][x] = true; // Moving this outside makes it more sparse
             }
         }
