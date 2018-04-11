@@ -179,7 +179,7 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
         T: FromStr,
         <T as FromStr>::Err: Display
 {
-    match what.parse::<T>() {
+    match what.trim().parse::<T>() {
         Ok(x) => x,
         Err(e) => {
             eprintln!("Could not parse {} into a number ({})", name, e);
