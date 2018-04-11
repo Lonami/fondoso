@@ -201,9 +201,11 @@ fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
                           VALUE_SEPARATOR);
                 exit(1);
             }
-            let x: usize = parse_or_exit(point[0], "x coordinate");
-            let y: usize = parse_or_exit(point[1], "y coordinate");
-            (x, y)
+            let x = parse_or_exit::<i32>(point[0], "x coordinate") % w as i32;
+            let y = parse_or_exit::<i32>(point[1], "y coordinate") % h as i32;
+            let x = if x < 0 { w as i32 + x } else { x };
+            let y = if y < 0 { h as i32 + y } else { y };
+            (x as usize, y as usize)
         }).collect()
     };
 
