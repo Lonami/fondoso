@@ -188,15 +188,13 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
     }
 }
 
-fn parse_points(w: usize, h: usize,
-                number: usize, positions: &str, colours: &str,
-                randomise_colours: bool, rng: &mut SmallRng)
+fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
     -> Vec<Point>
 {
-    let mut positions: Vec<(usize, usize)> = if positions.is_empty() {
+    let mut positions: Vec<(usize, usize)> = if opt.positions.is_empty() {
         Vec::new()
     } else {
-        positions.split(LIST_SEPARATOR).map(|point| {
+        opt.positions.split(LIST_SEPARATOR).map(|point| {
             let point: Vec<&str> = point.split(VALUE_SEPARATOR).collect();
             if point.len() != 2 {
                 eprintln!("Incorrect point format (must be x{}y)",
@@ -209,10 +207,10 @@ fn parse_points(w: usize, h: usize,
         }).collect()
     };
 
-    let mut colours: Vec<(u8, u8, u8)> = if colours.is_empty() {
+    let mut colours: Vec<(u8, u8, u8)> = if opt.colours.is_empty() {
         Vec::new()
     } else {
-            colours.split(LIST_SEPARATOR).map(|point| {
+        opt.colours.split(LIST_SEPARATOR).map(|point| {
             let colour: Vec<&str> = point.split(VALUE_SEPARATOR).collect();
             if colour.len() != 3 {
                 eprintln!("Incorrect colour format (must be r{0}g{0}b)",
@@ -226,15 +224,15 @@ fn parse_points(w: usize, h: usize,
         }).collect()
     };
 
-    if number == 0 && positions.is_empty() {
+    if opt.point_count == 0 && positions.is_empty() {
         positions.push((w / 2, h / 2));
     } else {
-        while positions.len() < number {
+        while positions.len() < opt.point_count {
             positions.push((rng.gen_range(0, w), rng.gen_range(0, h)));
         }
     }
 
-    if randomise_colours {
+    if opt.randomise_colours {
         while colours.len() < positions.len() {
             colours.push((rng.gen_range(0, 255),
                           rng.gen_range(0, 255),
@@ -257,6 +255,7 @@ fn parse_points(w: usize, h: usize,
 fn main() {
     let opt = Opt::from_args();
     let size: Vec<&str> = opt.size.split('x').collect();
+
     if size.len() != 2 {
         eprintln!("Incorrect size format (must be WxH)");
         exit(1);
@@ -291,8 +290,7 @@ fn main() {
         }
     };
 
-    for point in parse_points(w, h, opt.point_count, &opt.positions,
-                              &opt.colours, opt.randomise_colours, &mut rng)
+    for point in parse_points(w, h, &opt, &mut rng)
     {
         added[point.y][point.x] = true;
         pending.add(point);
