@@ -191,6 +191,7 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
 fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
     -> Vec<Point>
 {
+    let (w, h) = (w as i32, h as i32);
     let mut positions: Vec<(usize, usize)> = if opt.positions.is_empty() {
         Vec::new()
     } else {
@@ -201,10 +202,22 @@ fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
                           VALUE_SEPARATOR);
                 exit(1);
             }
-            let x = parse_or_exit::<i32>(point[0], "x coordinate") % w as i32;
-            let y = parse_or_exit::<i32>(point[1], "y coordinate") % h as i32;
-            let x = if x < 0 { w as i32 + x } else { x };
-            let y = if y < 0 { h as i32 + y } else { y };
+            let x = match parse_or_exit::<f64>(point[0], "x coordinate") {
+                x if x < 0.0 => w + x as i32 % w,
+                x if 0.0 < x && x < 1.0 => {
+                    let tmp = (x * w as f64) as i32;
+                    if tmp == w { w - 1 } else { tmp }
+                },
+                x => x as i32 % w
+            };
+            let y = match parse_or_exit::<f64>(point[1], "y coordinate") {
+                y if y < 0.0 => h + y as i32 % h,
+                y if 0.0 < y && y < 1.0 => {
+                    let tmp = (y * h as f64) as i32;
+                    if tmp == h { h - 1 } else { tmp }
+                },
+                y => y as i32 % h
+            };
             (x as usize, y as usize)
         }).collect()
     };
@@ -226,6 +239,7 @@ fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
         }).collect()
     };
 
+    let (w, h) = (w as usize, h as usize);
     if opt.point_count == 0 && positions.is_empty() {
         positions.push((w / 2, h / 2));
     } else {
