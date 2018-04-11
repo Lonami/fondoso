@@ -8,9 +8,9 @@ use std::fmt::Display;
 use std::process::exit;
 use std::collections::BTreeSet;
 
-use rand::{Rng, thread_rng};
+use rand::{Rng, SmallRng, SeedableRng, thread_rng};
 use image::ImageBuffer;
-use argparse::{ArgumentParser, StoreTrue, Store};
+use argparse::{ArgumentParser, StoreTrue, Store, StoreOption};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct Point {
@@ -46,10 +46,10 @@ impl PendingKind {
         }
     }
 
-    fn pop(&mut self) -> Point {
+    fn pop(&mut self, rng: &mut SmallRng) -> Point {
         match self {
             &mut PendingKind::VecPopRandom(ref mut vec) => {
-                let which = thread_rng().gen_range(0, vec.len());
+                let which = rng.gen_range(0, vec.len());
                 vec.remove(which)
             },
             &mut PendingKind::VecShuffleNeighbours(ref mut vec, _) => {
@@ -87,10 +87,10 @@ impl PendingKind {
 const VALUE_SEPARATOR: char = ',';
 const LIST_SEPARATOR: char = ':';
 
-fn offset(value: u8, delta: i32) -> u8 {
+fn offset(value: u8, delta: i32, rng: &mut SmallRng) -> u8 {
     let mut random: i32 = 0;
     while random == 0 {
-        random = thread_rng().gen_range(-delta, delta + 1);
+        random = rng.gen_range(-delta, delta + 1);
     }
     match value as i32 + random {
         x if x < 0   => 0,
@@ -99,7 +99,8 @@ fn offset(value: u8, delta: i32) -> u8 {
     }
 }
 
-fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: u8)
+fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: u8,
+              rng: &mut SmallRng)
     -> Vec<(usize, usize)>
 {
     let mut result = Vec::new();
@@ -116,8 +117,8 @@ fn neighbours(x: usize, y: usize, w: usize, h: usize, shuffle_chance: u8)
             result.push((nx as usize, ny as usize));
         }
     }
-    if shuffle_chance != 0 && thread_rng().gen_range(0, 100) < shuffle_chance {
-        thread_rng().shuffle(&mut result);
+    if shuffle_chance != 0 && rng.gen_range(0, 100) < shuffle_chance {
+        rng.shuffle(&mut result);
     }
     result
 }
@@ -138,7 +139,7 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
 
 fn parse_points(w: usize, h: usize,
                 number: usize, positions: &str, colours: &str,
-                randomise_colours: bool)
+                randomise_colours: bool, rng: &mut SmallRng)
     -> Vec<Point>
 {
     let mut positions: Vec<(usize, usize)> = if positions.is_empty() {
@@ -178,16 +179,15 @@ fn parse_points(w: usize, h: usize,
         positions.push((w / 2, h / 2));
     } else {
         while positions.len() < number {
-            positions.push((thread_rng().gen_range(0, w),
-                            thread_rng().gen_range(0, h)));
+            positions.push((rng.gen_range(0, w), rng.gen_range(0, h)));
         }
     }
 
     if randomise_colours {
         while colours.len() < positions.len() {
-            colours.push((thread_rng().gen_range(0, 255),
-                          thread_rng().gen_range(0, 255),
-                          thread_rng().gen_range(0, 255)));
+            colours.push((rng.gen_range(0, 255),
+                          rng.gen_range(0, 255),
+                          rng.gen_range(0, 255)));
         }
     } else {
         let last = colours.get(colours.len() - 1).unwrap_or(&(0, 0, 0)).clone();
@@ -213,6 +213,7 @@ fn main() {
     let mut output = "output.png".to_string();
     let mut delta = 4u32;
     let mut kind = "default".to_string();
+    let mut seed: Option<u64> = None;
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Create a new fondo.");
@@ -247,6 +248,9 @@ fn main() {
             it should be an integer between 0 and 100 indicating the chance\n\
             to shuffle the list of neighbours (100 always, 0 never).\n\
             Other values are 'tree' and 'treerev'");
+        ap.refer(&mut seed)
+            .add_option(&["-f", "--fixed-seed"], StoreOption,
+            "the seed to be used for the random number generator");
 
         ap.parse_args_or_exit();
     }
@@ -261,6 +265,18 @@ fn main() {
 
     let mut img = ImageBuffer::new(w as u32, h as u32);
     let mut added = vec![vec![false; w]; h];
+    let mut rng = match seed {
+        Some(seed) => {
+            let mut seed = seed;
+            let mut array = [0u8; 16];
+            for i in 0..array.len() {
+                array[i] = (seed % 256) as u8;
+                seed /= 256;
+            }
+            SmallRng::from_seed(array)
+        },
+        _ => SmallRng::from_rng(thread_rng()).unwrap()
+    };
 
     let mut pending = match kind.parse() {
         Ok(x) if x <= 100 => PendingKind::VecShuffleNeighbours(Vec::new(), x),
@@ -274,7 +290,7 @@ fn main() {
     };
 
     for point in parse_points(w, h, point_count, &positions, &colours,
-                              randomise_colours)
+                              randomise_colours, &mut rng)
     {
         added[point.y][point.x] = true;
         pending.add(point);
@@ -287,16 +303,18 @@ fn main() {
             println!("{:.2}%", 100.0 * (done as f64 / total as f64));
         }
 
-        let point = pending.pop();
+        let point = pending.pop(&mut rng);
         let (r, g, b) = (point.r, point.g, point.b);
-        let r = offset(r, delta);
-        let g = offset(g, delta);
-        let b = offset(b, delta);
+        let r = offset(r, delta, &mut rng);
+        let g = offset(g, delta, &mut rng);
+        let b = offset(b, delta, &mut rng);
 
         let (x, y) = (point.x, point.y);
         img.put_pixel(x as u32, y as u32, image::Rgb([r, g, b]));
         done += 1;
-        for &(x, y) in neighbours(x, y, w, h, pending.shuffle_chance()).iter() {
+        for &(x, y) in neighbours(x, y, w, h, pending.shuffle_chance(),
+                                  &mut rng).iter()
+        {
             if !added[y][x] {
                 pending.add(Point {r, g, b, x, y});
                 added[y][x] = true; // Moving this outside makes it more sparse
