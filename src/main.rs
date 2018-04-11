@@ -1,6 +1,8 @@
 extern crate rand;
 extern crate image;
-extern crate argparse;
+
+#[macro_use]
+extern crate structopt;
 
 use std::fs::File;
 use std::str::FromStr;
@@ -10,7 +12,7 @@ use std::collections::BTreeSet;
 
 use rand::{Rng, SmallRng, SeedableRng, thread_rng};
 use image::ImageBuffer;
-use argparse::{ArgumentParser, StoreTrue, Store, StoreOption};
+use structopt::StructOpt;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct Point {
@@ -86,6 +88,55 @@ impl PendingKind {
 
 const VALUE_SEPARATOR: char = ',';
 const LIST_SEPARATOR: char = ':';
+
+/// fondoso, to create beautiful images and wallpapers
+#[derive(StructOpt, Debug)]
+#[structopt(name = "fondoso")]
+struct Opt {
+    /// Be verbose
+    #[structopt(short = "v", long = "verbose")]
+    verbose: bool,
+
+    /// Size for the generated image, in WxH format
+    #[structopt(short = "s", long = "size", default_value = "500x500")]
+    size: String,
+
+    /// Number of random points to add to the list of positions
+    #[structopt(short = "n", long = "number", default_value = "0")]
+    point_count: usize,
+
+    /// Colon-separated list of comma-separated points x,y
+    #[structopt(short = "p", long = "positions", default_value = "")]
+    positions: String,
+
+    /// Colon-separated list of comma-separated colours r,g,b.
+    /// The last color is repeated until it fills all positions
+    #[structopt(short = "c", long = "colours", default_value = "")]
+    colours: String,
+
+    /// Randomise colours instead repeating the last one
+    #[structopt(short = "r", long = "random")]
+    randomise_colours: bool,
+
+    /// Output filename
+    #[structopt(short = "o", long = "output", default_value = "output.png")]
+    output: String,
+
+    /// Delta offset when updating the colour at each step
+    #[structopt(short = "d", long = "delta", default_value = "4")]
+    delta: u32,
+
+    /// The kind of list/point choosing to use. If a number is used
+    /// it should be an integer between 0 and 100 indicating the chance
+    /// to shuffle the list of neighbours (100 always, 0 never).
+    /// Other values are 'tree' and 'treerev'
+    #[structopt(short = "k", long = "kind", default_value = "default")]
+    kind: String,
+
+    /// The seed to be used for the random number generator
+    #[structopt(short = "f", long = "fixed-seed")]
+    seed: Option<u64>
+}
 
 fn offset(value: u8, delta: i32, rng: &mut SmallRng) -> u8 {
     let mut random: i32 = 0;
@@ -204,68 +255,19 @@ fn parse_points(w: usize, h: usize,
 }
 
 fn main() {
-    let mut verbose = false;
-    let mut size = "500x500".to_string();
-    let mut point_count: usize = 0;
-    let mut positions = "".to_string();
-    let mut colours = "".to_string();
-    let mut randomise_colours = false;
-    let mut output = "output.png".to_string();
-    let mut delta = 4u32;
-    let mut kind = "default".to_string();
-    let mut seed: Option<u64> = None;
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("Create a new fondo.");
-        ap.refer(&mut verbose)
-            .add_option(&["-v", "--verbose"], StoreTrue,
-            "be verbose");
-        ap.refer(&mut size)
-            .add_option(&["-s", "--size"], Store,
-            "size for the generated image in WxH format");
-        ap.refer(&mut point_count)
-            .add_option(&["-n", "--number"], Store,
-            "number of random points to add to the list of positions");
-        ap.refer(&mut positions)
-            .add_option(&["-p", "--positions"], Store,
-            "colon-separated list of comma-separated points x,y");
-        ap.refer(&mut colours)
-            .add_option(&["-c", "--colors", "--colours"], Store,
-            "colon-separated list of comma-separated colours r,g,b.\n\
-            The last color is repeated until it fills all positions");
-        ap.refer(&mut randomise_colours)
-            .add_option(&["-r", "--random"], StoreTrue,
-            "randomise colours instead repeating the last one");
-        ap.refer(&mut output)
-            .add_option(&["-o", "--output"], Store,
-            "output filename");
-        ap.refer(&mut delta)
-            .add_option(&["-d", "--delta"], Store,
-            "delta offset when updating the colour at each step");
-        ap.refer(&mut kind)
-            .add_option(&["-k", "--kind"], Store,
-            "the kind of list/point choosing to use. If a number is used\n\
-            it should be an integer between 0 and 100 indicating the chance\n\
-            to shuffle the list of neighbours (100 always, 0 never).\n\
-            Other values are 'tree' and 'treerev'");
-        ap.refer(&mut seed)
-            .add_option(&["-f", "--fixed-seed"], StoreOption,
-            "the seed to be used for the random number generator");
-
-        ap.parse_args_or_exit();
-    }
-    let size: Vec<&str> = size.split('x').collect();
+    let opt = Opt::from_args();
+    let size: Vec<&str> = opt.size.split('x').collect();
     if size.len() != 2 {
         eprintln!("Incorrect size format (must be WxH)");
         exit(1);
     }
     let w: usize = parse_or_exit(size[0], "width");
     let h: usize = parse_or_exit(size[1], "height");
-    let delta = delta as i32;
+    let delta = opt.delta as i32;
 
     let mut img = ImageBuffer::new(w as u32, h as u32);
     let mut added = vec![vec![false; w]; h];
-    let mut rng = match seed {
+    let mut rng = match opt.seed {
         Some(seed) => {
             let mut seed = seed;
             let mut array = [0u8; 16];
@@ -278,10 +280,10 @@ fn main() {
         _ => SmallRng::from_rng(thread_rng()).unwrap()
     };
 
-    let mut pending = match kind.parse() {
+    let mut pending = match opt.kind.parse() {
         Ok(x) if x <= 100 => PendingKind::VecShuffleNeighbours(Vec::new(), x),
         _ => {
-            match &kind[..] {
+            match &opt.kind[..] {
                 "tree" => PendingKind::SetBTree(BTreeSet::new()),
                 "treerev" => PendingKind::SetBTreeRev(BTreeSet::new()),
                 _ => PendingKind::VecPopRandom(Vec::new())
@@ -289,8 +291,8 @@ fn main() {
         }
     };
 
-    for point in parse_points(w, h, point_count, &positions, &colours,
-                              randomise_colours, &mut rng)
+    for point in parse_points(w, h, opt.point_count, &opt.positions,
+                              &opt.colours, opt.randomise_colours, &mut rng)
     {
         added[point.y][point.x] = true;
         pending.add(point);
@@ -299,7 +301,7 @@ fn main() {
     let total = w * h;
     let mut done = 0;
     while pending.has_any() {
-        if verbose && done % 10_000 == 0 {
+        if opt.verbose && done % 10_000 == 0 {
             println!("{:.2}%", 100.0 * (done as f64 / total as f64));
         }
 
@@ -322,12 +324,12 @@ fn main() {
         }
     }
 
-    if verbose {
+    if opt.verbose {
         println!("100.00%. Saving...");
     }
-    let ref mut fp = File::create(output).unwrap();
+    let ref mut fp = File::create(opt.output).unwrap();
     image::ImageRgb8(img).save(fp, image::PNG).unwrap();
-    if verbose {
+    if opt.verbose {
         println!("Done.");
     }
 }
