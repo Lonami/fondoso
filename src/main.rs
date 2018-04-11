@@ -239,7 +239,11 @@ fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
                           rng.gen_range(0, 255)));
         }
     } else {
-        let last = colours.get(colours.len() - 1).unwrap_or(&(0, 0, 0)).clone();
+        let last = if colours.is_empty() {
+            (0, 0, 0)
+        } else {
+            colours[colours.len() - 1].clone()
+        };
         while colours.len() < positions.len() {
             colours.push(last.clone());
         }
