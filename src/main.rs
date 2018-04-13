@@ -8,7 +8,7 @@ use std::fs::File;
 use std::str::FromStr;
 use std::fmt::Display;
 use std::process::exit;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BinaryHeap};
 
 use rand::{Rng, SmallRng, SeedableRng, thread_rng};
 use image::ImageBuffer;
@@ -248,6 +248,7 @@ fn main() {
             match &opt.kind[..] {
                 "tree" => PendingKind::SetBTree(BTreeSet::new()),
                 "treerev" => PendingKind::SetBTreeRev(BTreeSet::new()),
+                "heap" => PendingKind::Heap(BinaryHeap::new()),
                 _ => PendingKind::VecPopRandom(Vec::new())
             }
         }

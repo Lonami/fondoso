@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BinaryHeap};
 use rand::{Rng, SmallRng};
 
 use point::Point;
@@ -9,6 +9,7 @@ pub enum PendingKind {
     VecShuffleNeighbours(Vec<Point>, u8), // chance
     SetBTree(BTreeSet<Point>),
     SetBTreeRev(BTreeSet<Point>),
+    Heap(BinaryHeap<Point>)
 }
 
 impl PendingKind {
@@ -16,12 +17,15 @@ impl PendingKind {
         match self {
             &mut PendingKind::VecPopRandom(ref mut x)
             | &mut PendingKind::VecShuffleNeighbours(ref mut x, _) => {
-                x.push(point)
+                x.push(point);
             },
             &mut PendingKind::SetBTree(ref mut set)
             | &mut PendingKind::SetBTreeRev(ref mut set) => {
                 set.insert(point);
             },
+            &mut PendingKind::Heap(ref mut heap) => {
+                heap.push(point);
+            }
         }
     }
 
@@ -42,6 +46,9 @@ impl PendingKind {
                 let point = set.iter().rev().next().unwrap().clone();
                 set.take(&point).unwrap()
             },
+            &mut PendingKind::Heap(ref mut heap) => {
+                heap.pop().unwrap()
+            }
         }
     }
 
@@ -51,7 +58,9 @@ impl PendingKind {
             | &PendingKind::VecShuffleNeighbours(ref x, _) => x.is_empty(),
 
             &PendingKind::SetBTree(ref x)
-            | &PendingKind::SetBTreeRev(ref x) => x.is_empty()
+            | &PendingKind::SetBTreeRev(ref x) => x.is_empty(),
+
+            &PendingKind::Heap(ref x) => x.is_empty()
         }
     }
 
