@@ -8,22 +8,77 @@ use std::fs::File;
 use std::str::FromStr;
 use std::fmt::Display;
 use std::process::exit;
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use rand::{Rng, SmallRng, SeedableRng, thread_rng};
 use image::ImageBuffer;
 use structopt::StructOpt;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Point {
-    // TODO Changing the order here is what gives interesting
-    // results for the BTreeSet. Mostly alternating rgb order.
-    // So implement PartialOrd/Ord ourselves to allow settings.
     r: u8,
     g: u8,
     b: u8,
     x: usize,
     y: usize,
+    sort_mode: u16
+}
+
+impl Point {
+    fn as_tuple(&self) -> (usize, usize, usize, usize, usize) {
+        (
+            self.get_field(self.sort_mode >>  0),
+            self.get_field(self.sort_mode >>  3),
+            self.get_field(self.sort_mode >>  6),
+            self.get_field(self.sort_mode >>  9),
+            self.get_field(self.sort_mode >> 12),
+        )
+    }
+
+    fn get_field(&self, field: u16) -> usize {
+        match field & 0b111 {
+            1 => self.x,
+            2 => self.y,
+            3 => self.r as usize,
+            4 => self.g as usize,
+            5 => self.b as usize,
+            _ => 0
+        }
+    }
+
+    fn get_sort_mode(mode: &str) -> u16 {
+        let mut mode = mode.to_lowercase();
+        for c in "rgbxy".chars() {
+            if !mode.contains(c) {
+                mode.push(c);
+            }
+        }
+        let mut result = 0u16;
+        for c in mode.chars().rev() {
+            result = (result << 3) | match c {
+                'x' => 1,
+                'y' => 2,
+                'r' => 3,
+                'g' => 4,
+                'b' => 5,
+                _ => 0
+            }
+        }
+        result
+    }
+}
+
+impl Ord for Point {
+    fn cmp(&self, other: &Point) -> Ordering {
+        self.as_tuple().cmp(&other.as_tuple())
+    }
+}
+
+impl PartialOrd for Point {
+    fn partial_cmp(&self, other: &Point) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Debug)]
@@ -136,7 +191,14 @@ struct Opt {
 
     /// The seed to be used for the random number generator
     #[structopt(short = "f", long = "fixed-seed")]
-    seed: Option<u64>
+    seed: Option<u64>,
+
+    /// The ordering to use for tree kinds. The order consists of the
+    /// letters "rgbxy" (for the RGB channels and X, Y coordinates) in
+    /// arbitrary order. Other characters are ignored and repeating them
+    /// has undefined behaviour.
+    #[structopt(short = "g", long = "ordering", default_value = "rgbxy")]
+    order: String
 }
 
 fn offset(value: u8, delta: i32, rng: &mut SmallRng) -> u8 {
@@ -189,7 +251,7 @@ fn parse_or_exit<T>(what: &str, name: &str) -> T
     }
 }
 
-fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
+fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng, sort: &str)
     -> Vec<Point>
 {
     let (w, h) = (w as i32, h as i32);
@@ -266,10 +328,11 @@ fn parse_points(w: usize, h: usize, opt: &Opt, rng: &mut SmallRng)
         }
     }
 
+    let sort_mode = Point::get_sort_mode(sort);
     (0..positions.len()).map(|i| {
         let (x, y) = positions[i];
         let (r, g, b) = colours[i];
-        Point {x, y, r, g, b}
+        Point {x, y, r, g, b, sort_mode}
     }).collect()
 }
 
@@ -311,7 +374,7 @@ fn main() {
         }
     };
 
-    for point in parse_points(w, h, &opt, &mut rng)
+    for point in parse_points(w, h, &opt, &mut rng, &opt.order)
     {
         added[point.y][point.x] = true;
         pending.add(point);
@@ -337,7 +400,7 @@ fn main() {
                                   &mut rng).iter()
         {
             if !added[y][x] {
-                pending.add(Point {r, g, b, x, y});
+                pending.add(Point {r, g, b, x, y, sort_mode: point.sort_mode});
                 added[y][x] = true; // Moving this outside makes it more sparse
             }
         }
