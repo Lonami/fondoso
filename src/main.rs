@@ -91,7 +91,7 @@ const LIST_SEPARATOR: char = ':';
 
 /// fondoso, to create beautiful images and wallpapers
 #[derive(StructOpt, Debug)]
-#[structopt(name = "fondoso")]
+#[structopt(name = "fondoso", raw(max_term_width = "80"))]
 struct Opt {
     /// Be verbose
     #[structopt(short = "v", long = "verbose")]
@@ -111,7 +111,8 @@ struct Opt {
 
     /// Colon-separated list of comma-separated colours r,g,b.
     /// The last color is repeated until it fills all positions
-    #[structopt(short = "c", long = "colours", default_value = "")]
+    #[structopt(short = "c", long = "colours", default_value = "",
+                raw(aliases = r#"&["colors"]"#))]
     colours: String,
 
     /// Randomise colours instead repeating the last one
