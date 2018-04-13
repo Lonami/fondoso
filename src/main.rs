@@ -8,138 +8,17 @@ use std::fs::File;
 use std::str::FromStr;
 use std::fmt::Display;
 use std::process::exit;
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use rand::{Rng, SmallRng, SeedableRng, thread_rng};
 use image::ImageBuffer;
 use structopt::StructOpt;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Point {
-    r: u8,
-    g: u8,
-    b: u8,
-    x: usize,
-    y: usize,
-    sort_mode: u16
-}
+mod point;
+use point::Point;
 
-impl Point {
-    fn as_tuple(&self) -> (usize, usize, usize, usize, usize) {
-        (
-            self.get_field(self.sort_mode >>  0),
-            self.get_field(self.sort_mode >>  3),
-            self.get_field(self.sort_mode >>  6),
-            self.get_field(self.sort_mode >>  9),
-            self.get_field(self.sort_mode >> 12),
-        )
-    }
-
-    fn get_field(&self, field: u16) -> usize {
-        match field & 0b111 {
-            1 => self.x,
-            2 => self.y,
-            3 => self.r as usize,
-            4 => self.g as usize,
-            5 => self.b as usize,
-            _ => 0
-        }
-    }
-
-    fn get_sort_mode(mode: &str) -> u16 {
-        let mut mode = mode.to_lowercase();
-        for c in "rgbxy".chars() {
-            if !mode.contains(c) {
-                mode.push(c);
-            }
-        }
-        let mut result = 0u16;
-        for c in mode.chars().rev() {
-            result = (result << 3) | match c {
-                'x' => 1,
-                'y' => 2,
-                'r' => 3,
-                'g' => 4,
-                'b' => 5,
-                _ => 0
-            }
-        }
-        result
-    }
-}
-
-impl Ord for Point {
-    fn cmp(&self, other: &Point) -> Ordering {
-        self.as_tuple().cmp(&other.as_tuple())
-    }
-}
-
-impl PartialOrd for Point {
-    fn partial_cmp(&self, other: &Point) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug)]
-enum PendingKind {
-    VecPopRandom(Vec<Point>),
-    VecShuffleNeighbours(Vec<Point>, u8), // chance
-    SetBTree(BTreeSet<Point>),
-    SetBTreeRev(BTreeSet<Point>),
-}
-
-impl PendingKind {
-    fn add(&mut self, point: Point) {
-        match self {
-            &mut PendingKind::VecPopRandom(ref mut x)
-            | &mut PendingKind::VecShuffleNeighbours(ref mut x, _) => {
-                x.push(point)
-            },
-            &mut PendingKind::SetBTree(ref mut set)
-            | &mut PendingKind::SetBTreeRev(ref mut set) => {
-                set.insert(point);
-            },
-        }
-    }
-
-    fn pop(&mut self, rng: &mut SmallRng) -> Point {
-        match self {
-            &mut PendingKind::VecPopRandom(ref mut vec) => {
-                let which = rng.gen_range(0, vec.len());
-                vec.remove(which)
-            },
-            &mut PendingKind::VecShuffleNeighbours(ref mut vec, _) => {
-                vec.pop().unwrap()
-            },
-            &mut PendingKind::SetBTree(ref mut set) => {
-                let point = set.iter().next().unwrap().clone();
-                set.take(&point).unwrap()
-            },
-            &mut PendingKind::SetBTreeRev(ref mut set) => {
-                let point = set.iter().rev().next().unwrap().clone();
-                set.take(&point).unwrap()
-            },
-        }
-    }
-
-    fn has_any(&self) -> bool {
-        !match self {
-            &PendingKind::VecPopRandom(ref x)
-            | &PendingKind::VecShuffleNeighbours(ref x, _) => x.is_empty(),
-
-            &PendingKind::SetBTree(ref x)
-            | &PendingKind::SetBTreeRev(ref x) => x.is_empty()
-        }
-    }
-
-    fn shuffle_chance(&self) -> u8 {
-        match self {
-            &PendingKind::VecShuffleNeighbours(_, chance) => chance,
-            _ => 0
-        }
-    }
-}
+mod pendingkind;
+use pendingkind::PendingKind;
 
 const VALUE_SEPARATOR: char = ',';
 const LIST_SEPARATOR: char = ':';
