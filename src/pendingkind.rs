@@ -14,53 +14,56 @@ pub enum PendingKind {
 
 impl PendingKind {
     pub fn add(&mut self, point: Point) {
+        use PendingKind::*;
         match self {
-            &mut PendingKind::VecPopRandom(ref mut x)
-            | &mut PendingKind::VecShuffleNeighbours(ref mut x, _) => {
+            &mut VecPopRandom(ref mut x)
+            | &mut VecShuffleNeighbours(ref mut x, _) => {
                 x.push(point);
             },
-            &mut PendingKind::SetBTree(ref mut set)
-            | &mut PendingKind::SetBTreeRev(ref mut set) => {
+            &mut SetBTree(ref mut set)
+            | &mut SetBTreeRev(ref mut set) => {
                 set.insert(point);
             },
-            &mut PendingKind::Heap(ref mut heap) => {
+            &mut Heap(ref mut heap) => {
                 heap.push(point);
             }
         }
     }
 
     pub fn pop(&mut self, rng: &mut SmallRng) -> Point {
+        use PendingKind::*;
         match self {
-            &mut PendingKind::VecPopRandom(ref mut vec) => {
+            &mut VecPopRandom(ref mut vec) => {
                 let which = rng.gen_range(0, vec.len());
                 vec.remove(which)
             },
-            &mut PendingKind::VecShuffleNeighbours(ref mut vec, _) => {
+            &mut VecShuffleNeighbours(ref mut vec, _) => {
                 vec.pop().unwrap()
             },
-            &mut PendingKind::SetBTree(ref mut set) => {
+            &mut SetBTree(ref mut set) => {
                 let point = set.iter().next().unwrap().clone();
                 set.take(&point).unwrap()
             },
-            &mut PendingKind::SetBTreeRev(ref mut set) => {
+            &mut SetBTreeRev(ref mut set) => {
                 let point = set.iter().rev().next().unwrap().clone();
                 set.take(&point).unwrap()
             },
-            &mut PendingKind::Heap(ref mut heap) => {
+            &mut Heap(ref mut heap) => {
                 heap.pop().unwrap()
             }
         }
     }
 
     pub fn has_any(&self) -> bool {
+        use PendingKind::*;
         !match self {
-            &PendingKind::VecPopRandom(ref x)
-            | &PendingKind::VecShuffleNeighbours(ref x, _) => x.is_empty(),
+            &VecPopRandom(ref x)
+            | &VecShuffleNeighbours(ref x, _) => x.is_empty(),
 
-            &PendingKind::SetBTree(ref x)
-            | &PendingKind::SetBTreeRev(ref x) => x.is_empty(),
+            &SetBTree(ref x)
+            | &SetBTreeRev(ref x) => x.is_empty(),
 
-            &PendingKind::Heap(ref x) => x.is_empty()
+            &Heap(ref x) => x.is_empty()
         }
     }
 
