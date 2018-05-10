@@ -83,7 +83,7 @@ struct Opt {
 fn offset(value: u8, delta: i32, rng: &mut SmallRng) -> u8 {
     let mut random: i32 = 0;
     while random == 0 {
-        random = rng.gen_range(-delta, delta + 1);
+        random = rng.gen_range(-delta + 1, delta + 1);
     }
     match value as i32 + random {
         x if x < 0   => 0,
@@ -254,11 +254,48 @@ fn main() {
         }
     };
 
+    let mut angle: f64 = 0.0;
+    let da: f64 = 0.002;
+    let mut step: f64 = 0.0;
+    loop {
+        let x = (w as i32 / 2 + (step * angle.cos()) as i32);
+        let y = (h as i32 / 2 + (step * angle.sin()) as i32);
+        if x < 0 || y < 0 || x as usize >= w || y as usize >= h {
+            break;
+        }
+
+        let x = x as usize;
+        let y = y as usize;
+        let v = ((step as f64) / 3.0) as u8;
+        added[y][x] = true;
+        pending.add(Point {r: 0, g: v, b: v,
+                           x, y, sort_mode: 0});
+
+        let mut x = w - x;
+        let mut y = h - y;
+        if x == w {
+            x -= 1;
+        }
+        if y == h {
+            y -= 1;
+        }
+        added[y][x] = true;
+        pending.add(Point {r: 0, g: 0, b: v,
+                           x, y, sort_mode: 0});
+
+        step += 1.0;
+        angle += da;
+    }
+
+
+
+    /*
     for point in parse_points(w, h, &opt, &mut rng, &opt.order)
     {
         added[point.y][point.x] = true;
         pending.add(point);
     }
+    */
 
     let total = w * h;
     let mut done = 0;
